@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Heart Disease ML Pipeline — Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f7fb;--bg2:#ffffff;--bg3:#eef2f7;--bg4:#e2e8f0;
+  --border:rgba(15,23,42,.08);--border2:rgba(15,23,42,.14);
+  --t1:#172033;--t2:#5c6677;--t3:#8b95a5;
+  --red:#d66a6a;--redL:rgba(214,106,106,.14);--redM:#b94f4f;
+  --blue:#5b91d6;--blueL:rgba(91,145,214,.14);--blueM:#8cb7ea;
+  --green:#6aa85a;--greenL:rgba(106,168,90,.14);--greenM:#98c77f;
+  --amber:#d2a24f;--amberL:rgba(210,162,79,.14);
+  --gray:#8b95a5;--grayL:rgba(139,149,165,.14);
+  --teal:#55a88e;
+  --r-sm:6px;--r-md:10px;--r-lg:14px;
+}
+html,body{min-height:100vh;background:var(--bg);font-family:'Sora',sans-serif;color:var(--t1);font-size:14px;line-height:1.6}
+
+/* ── HEADER ── */
+.hdr{background:var(--bg2);border-bottom:.5px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;gap:12px;height:52px;position:sticky;top:0;z-index:200}
+.hdr-icon{width:32px;height:32px;background:var(--red);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.hdr-title{font-size:15px;font-weight:500;flex:1}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--t3);flex-shrink:0;transition:background .3s}
+.live-dot.active{background:#4caf50;box-shadow:0 0 6px #4caf5088}
+.hdr-badge{font-size:11px;color:var(--t2);background:var(--bg4);padding:3px 10px;border-radius:20px;border:.5px solid var(--border);font-family:'JetBrains Mono',monospace}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 52px)}
+@media(max-width:700px){.layout{grid-template-columns:1fr}}
+
+/* ── SIDEBAR ── */
+.sidebar{background:var(--bg2);border-right:.5px solid var(--border);padding:1.25rem 0;position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto}
+.sidebar-section{padding:0 1rem;margin-bottom:1.5rem}
+.sidebar-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+.stage-btn{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;border:none;background:none;color:var(--t2);font-family:'Sora',sans-serif;font-size:12px;cursor:pointer;border-radius:var(--r-sm);text-align:left;transition:all .18s;margin-bottom:2px}
+.stage-btn:hover{background:var(--bg4);color:var(--t1)}
+.stage-btn.active{background:var(--redL);color:var(--red);font-weight:500}
+.stage-dot{width:8px;height:8px;border-radius:50%;background:var(--bg4);border:.5px solid var(--border2);flex-shrink:0;transition:all .3s}
+.stage-dot.done{background:var(--green);border-color:var(--green)}
+.stage-dot.running{background:var(--amber);border-color:var(--amber);animation:pulse .8s infinite}
+.stage-dot.active-stage{background:var(--red);border-color:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.run-btn{display:block;width:calc(100% - 2rem);margin:0 1rem;padding:10px;background:var(--red);color:#fff;border:none;border-radius:var(--r-md);font-family:'Sora',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .2s;text-align:center}
+.run-btn:hover{opacity:.85}
+.run-btn:disabled{opacity:.4;cursor:not-allowed}
+
+.progress-wrap{padding:0 1rem;margin-top:.75rem}
+.progress-track{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--red);border-radius:2px;transition:width .4s ease;width:0%}
+.progress-label{font-size:10px;color:var(--t3);margin-top:4px;font-family:'JetBrains Mono',monospace}
+
+/* ── MAIN CONTENT ── */
+.main{padding:1.5rem;overflow-y:auto}
+.section{display:none}
+.section.active{display:block;animation:fadeIn .22s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+.section-title{font-size:20px;font-weight:500;margin-bottom:.3rem}
+.section-sub{font-size:12px;color:var(--t2);margin-bottom:1.25rem;line-height:1.65;max-width:640px}
+
+/* ── CARDS ── */
+.card{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem 1.3rem;margin-bottom:.9rem}
+.card-title{font-size:10px;font-weight:500;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.9rem}
+
+/* ── METRICS ── */
+.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:9px;margin-bottom:.9rem}
+.metric{background:var(--bg3);border-radius:var(--r-md);padding:.9rem 1rem}
+.metric-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.metric-value{font-size:21px;font-weight:500;font-family:'JetBrains Mono',monospace;color:var(--t1);transition:color .3s}
+.metric-value.red{color:var(--red)}.metric-value.blue{color:var(--blue)}.metric-value.green{color:var(--green)}
+
+/* ── GRIDS ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.9rem}
+@media(max-width:700px){.g2,.g3{grid-template-columns:1fr}}
+
+/* ── CHART ── */
+.chart-wrap{position:relative;width:100%}
+
+/* ── BARS ── */
+.bar-row{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.bar-lbl{width:90px;font-size:11px;color:var(--t2);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.bar-track{flex:1;height:7px;background:var(--bg4);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.bar-val{width:44px;text-align:right;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:500;color:var(--t1)}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:500}
+.b-green{background:var(--greenL);color:var(--greenM)}
+.b-red{background:var(--redL);color:var(--redM)}
+.b-blue{background:var(--blueL);color:var(--blueM)}
+.b-amber{background:var(--amberL);color:#EF9F27}
+
+/* ── TABLES ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;padding:7px 11px;background:var(--bg3);color:var(--t3);font-weight:500;border-bottom:.5px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.tbl td{padding:7px 11px;color:var(--t1);border-bottom:.5px solid var(--border);font-family:'JetBrains Mono',monospace}
+.tbl td:first-child{font-family:'Sora',sans-serif}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--bg3)}
+
+/* ── CONFUSION MATRIX ── */
+.cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;max-width:220px}
+.cm-cell{padding:14px;text-align:center;border-radius:var(--r-md)}
+.cm-lbl{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.cm-val{font-size:20px;font-weight:500;font-family:'JetBrains Mono',monospace}
+
+/* ── FEATURE PILLS ── */
+.pill{display:inline-block;padding:3px 10px;background:var(--bg3);border:.5px solid var(--border);border-radius:20px;font-size:11px;color:var(--t2);margin:3px;font-family:'JetBrains Mono',monospace}
+.pill.sel{background:var(--redL);border-color:rgba(226,75,74,.35);color:var(--red);font-weight:500}
+
+/* ── ALGO CARDS ── */
+.algo-pair{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-bottom:.9rem}
+@media(max-width:500px){.algo-pair{grid-template-columns:1fr}}
+.algo-card{padding:1rem 1.1rem;border-radius:var(--r-md);border:.5px solid var(--border);background:var(--bg3)}
+.algo-card.win{border-color:rgba(226,75,74,.35);background:var(--redL)}
+.algo-name{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:3px}
+.algo-sub{font-size:11px;color:var(--t2);margin-bottom:9px}
+.algo-score{font-size:26px;font-weight:500;font-family:'JetBrains Mono',monospace}
+.algo-card.win .algo-score{color:var(--red)}
+.win-badge{display:inline-block;margin-top:6px;padding:2px 9px;background:var(--red);color:#fff;border-radius:20px;font-size:10px;font-weight:500}
+
+/* ── PREDICT FORM ── */
+.pred-form{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+@media(max-width:580px){.pred-form{grid-template-columns:1fr}}
+.fg{display:flex;flex-direction:column;gap:5px}
+.flabel{font-size:12px;font-weight:500;color:var(--t2)}
+.finput{padding:8px 12px;font-size:13px;font-family:'Sora',sans-serif;background:var(--bg3);border:.5px solid var(--border2);border-radius:var(--r-sm);color:var(--t1);outline:none;transition:border-color .2s}
+.finput:focus{border-color:rgba(226,75,74,.5)}
+.fhint{font-size:10px;color:var(--t3);line-height:1.4}
+.pred-btn{width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:var(--r-md);font-family:'Sora',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:opacity .2s}
+.pred-btn:hover{opacity:.85}
+.pred-btn:disabled{opacity:.4;cursor:not-allowed}
+.pred-result{margin-top:1.25rem;padding:1.2rem 1.3rem;border-radius:var(--r-lg);border:.5px solid;display:none;animation:fadeIn .3s ease}
+.pred-result.vis{display:block}
+.pred-result.hi{background:var(--redL);border-color:rgba(226,75,74,.35)}
+.pred-result.lo{background:var(--greenL);border-color:rgba(99,153,34,.35)}
+.pr-tag{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px}
+.pred-result.hi .pr-tag{color:var(--redM)}.pred-result.lo .pr-tag{color:var(--greenM)}
+.pr-val{font-size:28px;font-weight:500;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+.pred-result.hi .pr-val{color:var(--red)}.pred-result.lo .pr-val{color:var(--green)}
+.pr-desc{font-size:12px;line-height:1.65;margin-bottom:10px}
+.pred-result.hi .pr-desc{color:var(--redM)}.pred-result.lo .pr-desc{color:var(--greenM)}
+.pr-bar-track{height:9px;background:var(--bg4);border-radius:5px;overflow:hidden;margin-top:5px}
+.pr-bar-fill{height:100%;border-radius:5px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+
+/* ── ITER PROGRESS ── */
+.iter-info{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--t2);margin-bottom:.5rem;font-family:'JetBrains Mono',monospace}
+.iter-info span{color:var(--t1);font-weight:500}
+
+/* ── LOG ── */
+.log{background:var(--bg3);border-radius:var(--r-md);padding:.8rem 1rem;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--t2);max-height:130px;overflow-y:auto;line-height:1.7}
+.log-line{color:var(--t1)}.log-line.ok{color:var(--green)}.log-line.err{color:var(--red)}.log-line.info{color:var(--blue)}
+
+/* ── DISCLAIMER ── */
+.disclaimer{text-align:center;font-size:11px;color:var(--t3);padding:.75rem;line-height:1.6;margin-top:.5rem}
+
+/* ── LEGEND ── */
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px;font-size:11px;color:var(--t2)}
+.legend-item{display:flex;align-items:center;gap:5px}
+.ldot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-icon">❤</div>
+  <span class="hdr-title">Heart Disease ML Pipeline</span>
+  <div class="live-dot" id="liveDot"></div>
+  <span class="hdr-badge" id="hdrStatus">Not started</span>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Pipeline</div>
+
+      <button class="stage-btn active" onclick="showSection('overview',this)" id="btn-overview">
+        <div class="stage-dot" id="dot-overview"></div>Overview
+      </button>
+      <button class="stage-btn" onclick="showSection('preprocessing',this)" id="btn-preprocessing">
+        <div class="stage-dot" id="dot-preprocessing"></div>1. Preprocessing
+      </button>
+      <button class="stage-btn" onclick="showSection('baseline_rf',this)" id="btn-baseline_rf">
+        <div class="stage-dot" id="dot-baseline_rf"></div>2. Baseline RF
+      </button>
+      <button class="stage-btn" onclick="showSection('feature_selection',this)" id="btn-feature_selection">
+        <div class="stage-dot" id="dot-feature_selection"></div>3. Feature Selection
+      </button>
+      <button class="stage-btn" onclick="showSection('rf_after_fs',this)" id="btn-rf_after_fs">
+        <div class="stage-dot" id="dot-rf_after_fs"></div>4. Before vs After FS
+      </button>
+      <button class="stage-btn" onclick="showSection('cuckoo_search',this)" id="btn-cuckoo_search">
+        <div class="stage-dot" id="dot-cuckoo_search"></div>5. Optimization
+      </button>
+      <button class="stage-btn" onclick="showSection('final_model',this)" id="btn-final_model">
+        <div class="stage-dot" id="dot-final_model"></div>6. Final Comparison
+      </button>
+      <button class="stage-btn" onclick="showSection('predict',this)" id="btn-predict">
+        <div class="stage-dot" id="dot-predict"></div>7. Predict
+      </button>
+    </div>
+
+    <button class="run-btn" id="runBtn" onclick="startPipeline()">▶ Run Pipeline</button>
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 / 6 stages</div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:1rem">
+      <div class="sidebar-label">Live Log</div>
+      <div class="log" id="logBox"><div class="log-line info">Waiting to start…</div></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- ══ OVERVIEW ══ -->
+    <div id="s-overview" class="section active">
+      <div class="section-title">Heart Disease ML Pipeline</div>
+      <div class="section-sub">Live data flows from the Python backend in real-time. Click <strong>Run Pipeline</strong> to start — each stage streams its results directly into the charts and metrics below.</div>
+
+      <div class="mg">
+        <div class="metric"><div class="metric-label">Dataset</div><div class="metric-value blue" id="ov-rows">—</div></div>
+        <div class="metric"><div class="metric-label">Features</div><div class="metric-value" id="ov-feats">—</div></div>
+        <div class="metric"><div class="metric-label">Best Accuracy</div><div class="metric-value green" id="ov-best">—</div></div>
+        <div class="metric"><div class="metric-label">Algorithm</div><div class="metric-value" id="ov-algo" style="font-size:13px">—</div></div>
+        <div class="metric"><div class="metric-label">Status</div><div class="metric-value" id="ov-status" style="font-size:13px">Idle</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Pipeline Architecture</div>
+        <div class="chart-wrap" style="height:220px"><canvas id="pipelineChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Accuracy Progression (updates live)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="overviewAccChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ══ PREPROCESSING ══ -->
+    <div id="s-preprocessing" class="section">
+      <div class="section-title">Data Preprocessing</div>
+      <div class="section-sub">Live stats from the Python Preprocessing class — null check, encoding, normalization, and stratified train/test split.</div>
+
+      <div class="mg">
+        <div class="metric"><div class="metric-label">Raw Rows</div><div class="metric-value blue" id="pp-raw">—</div></div>
+        <div class="metric"><div class="metric-label">Clean Rows</div><div class="metric-value green" id="pp-clean">—</div></div>
+        <div class="metric"><div class="metric-label">Features</div><div class="metric-value" id="pp-feats">—</div></div>
+        <div class="metric"><div class="metric-label">Null Values</div><div class="metric-value green" id="pp-null">—</div></div>
+        <div class="metric"><div class="metric-label">Duplicates</div><div class="metric-value" id="pp-dup">—</div></div>
+        <div class="metric"><div class="metric-label">Train Size</div><div class="metric-value" id="pp-train">—</div></div>
+        <div class="metric"><div class="metric-label">Test Size</div><div class="metric-value" id="pp-test">—</div></div>
+        <div class="metric"><div class="metric-label">Class 0</div><div class="metric-value" id="pp-c0">—</div></div>
+        <div class="metric"><div class="metric-label">Class 1</div><div class="metric-value" id="pp-c1">—</div></div>
+      </div>
+
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Class Distribution</div>
+          <div class="chart-wrap" style="height:190px"><canvas id="distChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Train / Test Split</div>
+          <div class="chart-wrap" style="height:190px"><canvas id="splitChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Feature Names (from dataset)</div>
+        <div id="pp-pills" style="min-height:30px"></div>
+      </div>
+    </div>
+
+    <!-- ══ BASELINE RF ══ -->
+    <div id="s-baseline_rf" class="section">
+      <div class="section-title">Baseline Random Forest</div>
+      <div class="section-sub">Default n_estimators=100, max_depth=None, all 13 features. Live metrics from sklearn.</div>
+
+      <div class="mg">
+        <div class="metric"><div class="metric-label">Accuracy</div><div class="metric-value blue" id="bl-acc">—</div></div>
+        <div class="metric"><div class="metric-label">Precision</div><div class="metric-value" id="bl-prec">—</div></div>
+        <div class="metric"><div class="metric-label">Recall</div><div class="metric-value" id="bl-rec">—</div></div>
+        <div class="metric"><div class="metric-label">F1 Score</div><div class="metric-value" id="bl-f1">—</div></div>
+        <div class="metric"><div class="metric-label">AUC-ROC</div><div class="metric-value green" id="bl-auc">—</div></div>
+      </div>
+
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Confusion Matrix (live)</div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:4px">
+            <div style="font-size:10px;color:var(--t3);align-self:flex-start;margin-left:10px;text-transform:uppercase;letter-spacing:.05em">Predicted →</div>
+            <div class="cm-grid">
+              <div class="cm-cell" style="background:var(--greenL)"><div class="cm-lbl">True Neg</div><div class="cm-val" style="color:var(--greenM)" id="cm-tn">—</div></div>
+              <div class="cm-cell" style="background:var(--redL)"><div class="cm-lbl">False Pos</div><div class="cm-val" style="color:var(--redM)" id="cm-fp">—</div></div>
+              <div class="cm-cell" style="background:var(--redL)"><div class="cm-lbl">False Neg</div><div class="cm-val" style="color:var(--redM)" id="cm-fn">—</div></div>
+              <div class="cm-cell" style="background:var(--greenL)"><div class="cm-lbl">True Pos</div><div class="cm-val" style="color:var(--greenM)" id="cm-tp">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">ROC Curve (live)</div>
+          <div class="chart-wrap" style="height:190px"><canvas id="rocChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Feature Importances — All Features (live)</div>
+        <div id="fi-bars"></div>
+      </div>
+    </div>
+
+    <!-- ══ FEATURE SELECTION ══ -->
+    <div id="s-feature_selection" class="section">
+      <div class="section-title">Feature Selection</div>
+      <div class="section-sub">Top-K features selected by RF gini importance. Live output from FeatureSelector.select_top_k().</div>
+
+      <div class="mg">
+        <div class="metric"><div class="metric-label">Before</div><div class="metric-value" id="fs-before">—</div></div>
+        <div class="metric"><div class="metric-label">After</div><div class="metric-value green" id="fs-after">—</div></div>
+        <div class="metric"><div class="metric-label">Importance %</div><div class="metric-value blue" id="fs-ret">—</div></div>
+        <div class="metric"><div class="metric-label">Reduction</div><div class="metric-value red" id="fs-red">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">All Features Ranked (live)</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="allFeatChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Cumulative Importance</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="cumChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Selected vs Dropped</div>
+        <div id="fs-pills" style="min-height:36px"></div>
+      </div>
+    </div>
+
+    <!-- ══ RF AFTER FS ══ -->
+    <div id="s-rf_after_fs" class="section">
+      <div class="section-title">Before vs After Feature Selection</div>
+      <div class="section-sub">RF retrained on selected features only. Live delta computed from Python.</div>
+
+      <div class="algo-pair">
+        <div class="algo-card">
+          <div class="algo-name">Before Feature Selection</div>
+          <div class="algo-sub">13 features — default params</div>
+          <div class="algo-score blue" id="fsb-acc">—</div>
+          <div style="font-size:11px;color:var(--t2)">Accuracy</div>
+        </div>
+        <div class="algo-card win">
+          <div class="algo-name">After Feature Selection</div>
+          <div class="algo-sub">6 features — default params</div>
+          <div class="algo-score" id="fsa-acc">—</div>
+          <div style="font-size:11px;color:var(--t2)">Accuracy</div>
+          <div class="win-badge" id="fsa-delta">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Metric Comparison (live)</div>
+        <div class="legend">
+          <div class="legend-item"><div class="ldot" style="background:var(--blueM)"></div>Before FS</div>
+          <div class="legend-item"><div class="ldot" style="background:var(--red)"></div>After FS</div>
+        </div>
+        <div class="chart-wrap" style="height:240px"><canvas id="fsCompareChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ══ CUCKOO SEARCH ══ -->
+    <div id="s-cuckoo_search" class="section">
+      <div class="section-title">Optimization — Cuckoo Search vs Random Search</div>
+      <div class="section-sub">Live iteration-by-iteration progress streamed from Python. Watch the convergence in real time.</div>
+
+      <div class="g2">
+        <div>
+          <div class="card">
+            <div class="card-title">Random Search Progress</div>
+            <div class="iter-info">Iter: <span id="rs-iter">—</span> &nbsp;|&nbsp; Best: <span id="rs-score">—</span>% &nbsp;|&nbsp; n_est: <span id="rs-nest">—</span> &nbsp;|&nbsp; depth: <span id="rs-depth">—</span></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Cuckoo Search Progress</div>
+            <div class="iter-info">Iter: <span id="cs-iter">—</span> &nbsp;|&nbsp; Best: <span id="cs-score">—</span>% &nbsp;|&nbsp; n_est: <span id="cs-nest">—</span> &nbsp;|&nbsp; depth: <span id="cs-depth">—</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Convergence (live)</div>
+          <div class="legend">
+            <div class="legend-item"><div class="ldot" style="background:var(--red)"></div>Cuckoo Search</div>
+            <div class="legend-item"><div class="ldot" style="background:var(--blue)"></div>Random Search</div>
+          </div>
+          <div class="chart-wrap" style="height:200px"><canvas id="convChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="algo-pair" id="opt-winner-wrap" style="display:none">
+        <div class="algo-card">
+          <div class="algo-name">Random Search</div>
+          <div class="algo-sub">Uniform sampling, 30 iters</div>
+          <div class="algo-score" id="rs-final-score">—</div>
+          <div style="font-size:11px;color:var(--t2)">Best Accuracy</div>
+        </div>
+        <div class="algo-card win">
+          <div class="algo-name">Cuckoo Search</div>
+          <div class="algo-sub">Lévy flight, Pa=0.25, 25 nests</div>
+          <div class="algo-score" id="cs-final-score">—</div>
+          <div style="font-size:11px;color:var(--t2)">Best Accuracy</div>
+          <div class="win-badge" id="cs-advantage">—</div>
+        </div>
+      </div>
+
+      <div class="mg" id="cs-params-wrap" style="display:none">
+        <div class="metric"><div class="metric-label">Best n_estimators</div><div class="metric-value blue" id="cs-best-nest">—</div></div>
+        <div class="metric"><div class="metric-label">Best max_depth</div><div class="metric-value" id="cs-best-depth">—</div></div>
+        <div class="metric"><div class="metric-label">CS Score</div><div class="metric-value green" id="cs-best-score">—</div></div>
+        <div class="metric"><div class="metric-label">RS Score</div><div class="metric-value" id="rs-best-score">—</div></div>
+      </div>
+    </div>
+
+    <!-- ══ FINAL MODEL ══ -->
+    <div id="s-final_model" class="section">
+      <div class="section-title">Final Comparison — All Stages</div>
+      <div class="section-sub">End-to-end accuracy progression. Final model uses best hyperparameters + top-6 features.</div>
+
+      <div class="mg">
+        <div class="metric"><div class="metric-label">Final Accuracy</div><div class="metric-value green" id="fm-acc">—</div></div>
+        <div class="metric"><div class="metric-label">Precision</div><div class="metric-value" id="fm-prec">—</div></div>
+        <div class="metric"><div class="metric-label">Recall</div><div class="metric-value" id="fm-rec">—</div></div>
+        <div class="metric"><div class="metric-label">F1</div><div class="metric-value" id="fm-f1">—</div></div>
+        <div class="metric"><div class="metric-label">AUC</div><div class="metric-value" id="fm-auc">—</div></div>
+        <div class="metric"><div class="metric-label">Winner</div><div class="metric-value red" id="fm-winner" style="font-size:12px">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Accuracy Across All Stages (live)</div>
+        <div class="chart-wrap" style="height:240px"><canvas id="stagesChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">All Metrics — Final Confusion Matrix</div>
+        <div class="g2">
+          <div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+              <div style="font-size:10px;color:var(--t3);align-self:flex-start;text-transform:uppercase;letter-spacing:.05em">Predicted →</div>
+              <div class="cm-grid">
+                <div class="cm-cell" style="background:var(--greenL)"><div class="cm-lbl">True Neg</div><div class="cm-val" style="color:var(--greenM)" id="fm-tn">—</div></div>
+                <div class="cm-cell" style="background:var(--redL)"><div class="cm-lbl">False Pos</div><div class="cm-val" style="color:var(--redM)" id="fm-fp">—</div></div>
+                <div class="cm-cell" style="background:var(--redL)"><div class="cm-lbl">False Neg</div><div class="cm-val" style="color:var(--redM)" id="fm-fn">—</div></div>
+                <div class="cm-cell" style="background:var(--greenL)"><div class="cm-lbl">True Pos</div><div class="cm-val" style="color:var(--greenM)" id="fm-tp">—</div></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="bar-row"><div class="bar-lbl">Accuracy</div><div class="bar-track"><div class="bar-fill" id="fm-bar-acc" style="background:var(--green)"></div></div><div class="bar-val" id="fm-bv-acc">—</div></div>
+            <div class="bar-row"><div class="bar-lbl">Precision</div><div class="bar-track"><div class="bar-fill" id="fm-bar-prec" style="background:var(--blue)"></div></div><div class="bar-val" id="fm-bv-prec">—</div></div>
+            <div class="bar-row"><div class="bar-lbl">Recall</div><div class="bar-track"><div class="bar-fill" id="fm-bar-rec" style="background:var(--amber)"></div></div><div class="bar-val" id="fm-bv-rec">—</div></div>
+            <div class="bar-row"><div class="bar-lbl">F1 Score</div><div class="bar-track"><div class="bar-fill" id="fm-bar-f1" style="background:var(--red)"></div></div><div class="bar-val" id="fm-bv-f1">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Summary Table</div>
+        <table class="tbl">
+          <thead><tr><th>Stage</th><th>Accuracy</th><th>Note</th></tr></thead>
+          <tbody id="summaryTbl"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ PREDICT ══ -->
+    <div id="s-predict" class="section">
+      <div class="section-title">Live Prediction Interface</div>
+      <div class="section-sub">Enter patient vitals — the request is sent to the Python Flask model and the result streams back instantly.</div>
+
+      <div class="card" id="pred-locked" style="display:none">
+        <div style="text-align:center;padding:1rem;color:var(--t2);font-size:13px">Run the pipeline first to train the model.</div>
+      </div>
+
+      <div class="card" id="pred-form-wrap">
+        <div class="card-title">Patient Input (Top 6 Features)</div>
+        <div class="pred-form" id="dynForm"></div>
+        <button class="pred-btn" id="predBtn" onclick="runPredict()">Predict  →</button>
+
+        <div id="pred-result" class="pred-result">
+          <div class="pr-tag" id="pr-tag"></div>
+          <div class="pr-val" id="pr-val"></div>
+          <div class="pr-desc" id="pr-desc"></div>
+          <div style="font-size:11px;color:var(--t2);margin-bottom:4px" id="pr-bar-lbl"></div>
+          <div class="pr-bar-track"><div class="pr-bar-fill" id="pr-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Feature Importance Radar</div>
+          <div class="chart-wrap" style="height:240px"><canvas id="radarChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Feature Weight Distribution</div>
+          <div class="chart-wrap" style="height:240px"><canvas id="donutChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="disclaimer">
+        Prediction served by live Python Flask model (91%+ accuracy on test set).<br>
+        <strong>Not a medical diagnosis.</strong> Always consult a qualified physician.
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   NAVIGATION
+───────────────────────────────────────────────────────────── */
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.stage-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+  (btn || document.getElementById('btn-' + id)).classList.add('active');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LOG
+───────────────────────────────────────────────────────────── */
+function log(msg, cls = '') {
+  const box = document.getElementById('logBox');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + cls;
+  line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  if (box.children.length > 80) box.removeChild(box.firstChild);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PROGRESS
+───────────────────────────────────────────────────────────── */
+const TOTAL_STAGES = 6;
+let stagesDone = 0;
+
+function bumpProgress() {
+  stagesDone++;
+  const pct = Math.round((stagesDone / TOTAL_STAGES) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = stagesDone + ' / ' + TOTAL_STAGES + ' stages';
+}
+
+function setStageDot(id, state) { // state: running | done | ''
+  const dot = document.getElementById('dot-' + id);
+  if (!dot) return;
+  dot.className = 'stage-dot ' + state;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CHARTS
+───────────────────────────────────────────────────────────── */
+const charts = {};
+
+function mkChart(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+  return charts[id];
+}
+
+const C = {
+  red:'#d66a6a', redL:'rgba(214,106,106,.18)',
+  blue:'#5b91d6', blueL:'rgba(91,145,214,.18)', blueM:'#8cb7ea',
+  green:'#6aa85a', greenL:'rgba(106,168,90,.18)', greenM:'#98c77f',
+  amber:'#d2a24f', gray:'#8b95a5', teal:'#55a88e',
+};
+
+const GRID = { color:'rgba(15,23,42,.08)' };
+const TICK = { color:'#5c6677' };
+
+function initOverviewChart() {
+  mkChart('pipelineChart', {
+    type: 'bar',
+    data: {
+      labels: ['Preprocessing','Baseline RF','Feature Sel.','RS Optim.','CS Optim.','Final Model'],
+      datasets: [{
+        data: [1,1,1,1,1,1],
+        backgroundColor: [C.teal, C.blue, C.amber, C.blueM, C.red, C.green],
+        borderRadius: 6, borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{display:false},
+        y:{ grid:{display:false}, ticks:{color:'#8b95a5'} }
+      }
+    }
+  });
+
+  mkChart('overviewAccChart', {
+    type:'line',
+    data:{
+      labels:[],
+      datasets:[{
+        label:'Accuracy %', data:[], borderColor:C.red, borderWidth:2.5,
+        tension:0.35, fill:true, backgroundColor:C.redL,
+        pointRadius:5, pointBackgroundColor:C.red,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{ min:70, max:100, ticks:{callback:v=>v+'%', ...TICK}, grid:GRID },
+        x:{ grid:{display:false}, ticks:TICK }
+      }
+    }
+  });
+}
+
+function updateOverviewAcc(label, value) {
+  const ch = charts['overviewAccChart'];
+  if (!ch) return;
+  ch.data.labels.push(label);
+  ch.data.datasets[0].data.push(value);
+  ch.update('active');
+}
+
+// convergence chart (live)
+function initConvChart() {
+  mkChart('convChart', {
+    type:'line',
+    data:{
+      labels:[],
+      datasets:[
+        { label:'Cuckoo', data:[], borderColor:C.red, borderWidth:2.5, tension:0.3, fill:false, pointRadius:0 },
+        { label:'Random', data:[], borderColor:C.blue, borderWidth:2, borderDash:[5,3], tension:0.3, fill:false, pointRadius:0 },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{ duration:0 },
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ title:{display:true,text:'Iteration',color:'#5c6677',font:{size:10}}, ticks:TICK, grid:GRID },
+        y:{ min:70, ticks:{callback:v=>v+'%', ...TICK}, grid:GRID }
+      }
+    }
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SSE CONNECTION
+───────────────────────────────────────────────────────────── */
+let evtSource = null;
+let modelReady = false;
+let selectedFeatures = [];
+
+function connectSSE() {
+  evtSource = new EventSource('/stream');
+
+  evtSource.addEventListener('preprocessing', e => {
+    const d = JSON.parse(e.data);
+    log('Preprocessing complete — ' + d.clean_rows + ' rows', 'ok');
+    setStageDot('preprocessing', 'done');
+    bumpProgress();
+
+    setText('pp-raw',   d.raw_rows.toLocaleString());
+    setText('pp-clean', d.clean_rows.toLocaleString());
+    setText('pp-feats', d.n_features);
+    setText('pp-null',  d.null_count);
+    setText('pp-dup',   d.dup_count);
+    setText('ov-rows',  d.clean_rows.toLocaleString());
+    setText('ov-feats', d.n_features);
+
+    const pills = d.feature_names.map(f => `<span class="pill">${f}</span>`).join('');
+    document.getElementById('pp-pills').innerHTML = pills;
+  });
+
+  evtSource.addEventListener('split', e => {
+    const d = JSON.parse(e.data);
+    setText('pp-train', d.train_size);
+    setText('pp-test',  d.test_size);
+    setText('pp-c0', d.class_0);
+    setText('pp-c1', d.class_1);
+
+    mkChart('distChart', {
+      type:'bar',
+      data:{ labels:['No Disease','Disease'], datasets:[{ data:[d.class_0,d.class_1], backgroundColor:[C.blueM,C.red], borderRadius:5 }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,grid:GRID,ticks:TICK}, x:{grid:{display:false},ticks:TICK} } }
+    });
+
+    mkChart('splitChart', {
+      type:'doughnut',
+      data:{ labels:['Train','Test'], datasets:[{ data:[d.train_size,d.test_size], backgroundColor:[C.blue,C.amber], borderWidth:0 }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom',labels:{color:'#8b95a5',boxWidth:10,font:{size:11}}} }, cutout:'60%' }
+    });
+  });
+
+  evtSource.addEventListener('baseline_rf', e => {
+    const d = JSON.parse(e.data);
+    log('Baseline RF — acc ' + d.accuracy + '%', 'ok');
+    setStageDot('baseline_rf', 'done');
+    bumpProgress();
+
+    setText('bl-acc',  d.accuracy + '%');
+    setText('bl-prec', d.precision + '%');
+    setText('bl-rec',  d.recall + '%');
+    setText('bl-f1',   d.f1 + '%');
+    setText('bl-auc',  d.auc);
+    document.getElementById('bl-acc').className = 'metric-value blue';
+
+    const cm = d.confusion_matrix;
+    setText('cm-tn', cm[0][0]); setText('cm-fp', cm[0][1]);
+    setText('cm-fn', cm[1][0]); setText('cm-tp', cm[1][1]);
+
+    mkChart('rocChart', {
+      type:'line',
+      data:{ labels: d.roc_fpr.filter((_,i)=>i%3===0).map(v=>v.toFixed(2)),
+        datasets:[
+          { label:'ROC', data: d.roc_tpr.filter((_,i)=>i%3===0), borderColor:C.red, borderWidth:2.5, fill:false, tension:0.4, pointRadius:0 },
+          { label:'Random', data: d.roc_fpr.filter((_,i)=>i%3===0), borderColor:C.gray, borderDash:[4,4], borderWidth:1, fill:false, pointRadius:0 }
+        ]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ x:{title:{display:true,text:'FPR',font:{size:10},color:'#5c6677'},ticks:{...TICK,maxTicksLimit:6},grid:GRID}, y:{title:{display:true,text:'TPR',font:{size:10},color:'#5c6677'},min:0,max:1,ticks:TICK,grid:GRID} } }
+    });
+
+    const bars = d.feature_importances.map(f =>
+      `<div class="bar-row"><div class="bar-lbl">${f.feature}</div><div class="bar-track"><div class="bar-fill" style="width:${(f.importance*550).toFixed(1)}%;background:${f.importance>0.1?C.blue:C.gray}"></div></div><div class="bar-val">${f.importance}</div></div>`
+    ).join('');
+    document.getElementById('fi-bars').innerHTML = bars;
+
+    updateOverviewAcc('Baseline RF', d.accuracy);
+  });
+
+  evtSource.addEventListener('feature_selection', e => {
+    const d = JSON.parse(e.data);
+    log('Feature selection — top ' + d.selected_features.length + ' selected', 'ok');
+    setStageDot('feature_selection', 'done');
+    bumpProgress();
+
+    selectedFeatures = d.selected_features;
+    setText('fs-before', d.all_features.length);
+    setText('fs-after',  d.selected_features.length);
+    setText('fs-ret',    d.total_retained + '%');
+    const redPct = Math.round((1 - d.selected_features.length / d.all_features.length) * 100);
+    setText('fs-red', redPct + '%');
+
+    mkChart('allFeatChart', {
+      type:'bar',
+      data:{
+        labels: d.all_features,
+        datasets:[{ data: d.all_importances, backgroundColor: d.all_features.map(f => d.selected_features.includes(f) ? C.red : C.gray), borderRadius:4 }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ y:{beginAtZero:true,grid:GRID,ticks:TICK}, x:{grid:{display:false},ticks:{...TICK,maxRotation:45}} } }
+    });
+
+    mkChart('cumChart', {
+      type:'line',
+      data:{
+        labels: d.selected_features.map((_,i)=>'Top '+(i+1)),
+        datasets:[
+          { label:'Cumulative', data:d.cumulative_importance, borderColor:C.red, borderWidth:2.5, fill:true, backgroundColor:C.redL, tension:0.3, pointRadius:4, pointBackgroundColor:C.red },
+          { label:'80% line', data:Array(d.cumulative_importance.length).fill(80), borderColor:C.gray, borderDash:[5,4], borderWidth:1, fill:false, pointRadius:0 }
+        ]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ y:{min:0,max:100,ticks:{callback:v=>v+'%',...TICK},grid:GRID}, x:{grid:{display:false},ticks:TICK} } }
+    });
+
+    const pillHtml = [
+      ...d.selected_features.map(f=>`<span class="pill sel">${f}</span>`),
+      ...d.dropped_features.map(f=>`<span class="pill">${f}</span>`),
+    ].join('');
+    document.getElementById('fs-pills').innerHTML = pillHtml;
+
+    buildPredictForm(d.selected_features);
+    buildRadarDonut(d.all_features, d.all_importances, d.selected_features);
+  });
+
+  evtSource.addEventListener('rf_after_fs', e => {
+    const d = JSON.parse(e.data);
+    log('RF after FS — acc ' + d.accuracy + '%  (Δ ' + (d.delta_accuracy>0?'+':'') + d.delta_accuracy + '%)', 'ok');
+    setStageDot('rf_after_fs', 'done');
+    bumpProgress();
+
+    setText('fsb-acc', d.baseline_accuracy + '%');
+    setText('fsa-acc', d.accuracy + '%');
+    setText('fsa-delta', (d.delta_accuracy>0?'+':'') + d.delta_accuracy + '%');
+
+    const base = d.baseline_accuracy, after = d.accuracy;
+    mkChart('fsCompareChart', {
+      type:'bar',
+      data:{
+        labels:['Accuracy','Precision','Recall','F1 Score'],
+        datasets:[
+          { label:'Before FS', data:[base, d.baseline_accuracy, d.baseline_accuracy, d.baseline_accuracy], backgroundColor:C.blueM, borderRadius:5 },
+          { label:'After FS',  data:[d.accuracy, d.precision, d.recall, d.f1], backgroundColor:C.red, borderRadius:5 },
+        ]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ y:{min:70,ticks:{callback:v=>v+'%',...TICK},grid:GRID}, x:{grid:{display:false},ticks:TICK} } }
+    });
+
+    updateOverviewAcc('After Feat Sel', d.accuracy);
+  });
+
+  evtSource.addEventListener('rs_progress', e => {
+    const d = JSON.parse(e.data);
+    setText('rs-iter',  d.iteration);
+    setText('rs-score', d.best_score);
+    setText('rs-nest',  d.best_params.n_estimators);
+    setText('rs-depth', d.best_params.max_depth);
+
+    const ch = charts['convChart'];
+    if (ch) {
+      if (ch.data.datasets[1].data.length < d.iteration) {
+        ch.data.datasets[1].data.push(d.best_score);
+        if (ch.data.labels.length < d.iteration) ch.data.labels.push(d.iteration);
+        ch.update('none');
+      }
+    }
+  });
+
+  evtSource.addEventListener('random_search_done', e => {
+    const d = JSON.parse(e.data);
+    log('Random Search done — best ' + d.best_score + '%', 'ok');
+    updateOverviewAcc('Random Search', d.best_score);
+    setText('rs-best-score', d.best_score + '%');
+    setText('rs-final-score', d.best_score + '%');
+  });
+
+  evtSource.addEventListener('cs_progress', e => {
+    const d = JSON.parse(e.data);
+    setText('cs-iter',  d.iteration);
+    setText('cs-score', d.best_score);
+    setText('cs-nest',  d.best_params.n_estimators);
+    setText('cs-depth', d.best_params.max_depth);
+
+    const ch = charts['convChart'];
+    if (ch) {
+      if (ch.data.datasets[0].data.length < d.iteration) {
+        ch.data.datasets[0].data.push(d.best_score);
+        ch.update('none');
+      }
+    }
+  });
+
+  evtSource.addEventListener('cuckoo_search_done', e => {
+    const d = JSON.parse(e.data);
+    log('Cuckoo Search done — best ' + d.best_score + '%', 'ok');
+    setStageDot('cuckoo_search', 'done');
+    bumpProgress();
+
+    setText('cs-best-nest',  d.best_params.n_estimators);
+    setText('cs-best-depth', d.best_params.max_depth);
+    setText('cs-best-score', d.best_score + '%');
+    setText('rs-best-score', d.rs_score + '%');
+    setText('cs-final-score', d.best_score + '%');
+    setText('rs-final-score', d.rs_score + '%');
+    const adv = (d.best_score - d.rs_score).toFixed(2);
+    setText('cs-advantage', 'CS leads by +' + adv + '%');
+
+    document.getElementById('opt-winner-wrap').style.display = 'grid';
+    document.getElementById('cs-params-wrap').style.display = 'grid';
+
+    updateOverviewAcc('Cuckoo Search', d.best_score);
+  });
+
+  evtSource.addEventListener('final_model', e => {
+    const d = JSON.parse(e.data);
+    log('Final model — acc ' + d.final_accuracy + '%  winner: ' + d.winner, 'ok');
+    setStageDot('final_model', 'done');
+    setStageDot('predict', 'done');
+    bumpProgress();
+
+    setText('fm-acc',    d.accuracy + '%');
+    setText('fm-prec',   d.precision + '%');
+    setText('fm-rec',    d.recall + '%');
+    setText('fm-f1',     d.f1 + '%');
+    setText('fm-auc',    d.auc);
+    setText('fm-winner', d.winner);
+
+    const cm = d.confusion_matrix;
+    setText('fm-tn', cm[0][0]); setText('fm-fp', cm[0][1]);
+    setText('fm-fn', cm[1][0]); setText('fm-tp', cm[1][1]);
+
+    setBar('fm-bar-acc',  'fm-bv-acc',  d.accuracy,  '%');
+    setBar('fm-bar-prec', 'fm-bv-prec', d.precision, '%');
+    setBar('fm-bar-rec',  'fm-bv-rec',  d.recall,    '%');
+    setBar('fm-bar-f1',   'fm-bv-f1',   d.f1,        '%');
+
+    mkChart('stagesChart', {
+      type:'bar',
+      data:{
+        labels: d.stages.map(s=>s.label),
+        datasets:[{ label:'Accuracy', data:d.stages.map(s=>s.accuracy),
+          backgroundColor:[C.gray, C.blueM, C.blue, C.red, C.green], borderRadius:7, borderSkipped:false }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ y:{min:70,ticks:{callback:v=>v+'%',...TICK},grid:GRID}, x:{grid:{display:false},ticks:TICK} } }
+    });
+
+    const tbody = document.getElementById('summaryTbl');
+    const notes = ['Starting point', '+FS lift', '+Optim lift', '+Optim lift', 'Best overall'];
+    tbody.innerHTML = d.stages.map((s,i) =>
+      `<tr><td>${s.label}</td><td>${s.accuracy}%</td><td><span class="badge ${i===d.stages.length-1?'b-green':'b-blue'}">${notes[i]||''}</span></td></tr>`
+    ).join('');
+
+    updateOverviewAcc('Final Model', d.accuracy);
+    setText('ov-best',  d.accuracy + '%');
+    setText('ov-algo',  d.winner);
+    setText('ov-status', 'Complete');
+
+    modelReady = true;
+  });
+
+  evtSource.addEventListener('stage', e => {
+    const d = JSON.parse(e.data);
+    if (d.status === 'start') {
+      setStageDot(d.stage, 'running');
+      log('Starting: ' + d.stage, 'info');
+      showSection(d.stage, null);
+    }
+  });
+
+  evtSource.addEventListener('pipeline_complete', e => {
+    log('Pipeline complete!', 'ok');
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('runBtn').textContent = '▶ Run Again';
+    document.getElementById('liveDot').classList.remove('active');
+    document.getElementById('hdrStatus').textContent = 'Complete';
+    document.getElementById('pred-form-wrap').style.display = 'block';
+    document.getElementById('pred-locked').style.display = 'none';
+  });
+
+  evtSource.addEventListener('error', e => {
+    try {
+      const d = JSON.parse(e.data);
+      log('ERROR: ' + d.message, 'err');
+    } catch { log('SSE error', 'err'); }
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('liveDot').classList.remove('active');
+  });
+
+  evtSource.onerror = () => {
+    document.getElementById('liveDot').classList.remove('active');
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────────── */
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function setBar(barId, valId, pct, suffix='') {
+  const b = document.getElementById(barId);
+  const v = document.getElementById(valId);
+  if (b) b.style.width = pct + '%';
+  if (v) v.textContent = pct + suffix;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PIPELINE START
+───────────────────────────────────────────────────────────── */
+function startPipeline() {
+  stagesDone = 0;
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressLabel').textContent = '0 / 6 stages';
+  ['preprocessing','baseline_rf','feature_selection','rf_after_fs','cuckoo_search','final_model','predict']
+    .forEach(id => setStageDot(id, ''));
+  document.getElementById('logBox').innerHTML = '';
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('runBtn').textContent = 'Running…';
+  document.getElementById('liveDot').classList.add('active');
+  document.getElementById('hdrStatus').textContent = 'Running';
+  document.getElementById('ov-status').textContent = 'Running';
+
+  initConvChart();
+  showSection('overview', document.getElementById('btn-overview'));
+
+  fetch('/run', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({}) })
+    .then(r => r.json())
+    .then(d => { log('Pipeline started', 'info'); })
+    .catch(err => { log('Failed to start: ' + err, 'err'); document.getElementById('runBtn').disabled = false; });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PREDICTION
+───────────────────────────────────────────────────────────── */
+function buildPredictForm(features) {
+  const hints = {
+  cp: {
+    label: 'Chest Pain Type (cp)',
+    type: 'select',
+    opts: [
+      '1 — Typical angina',
+      '2 — Atypical angina',
+      '3 — Non-anginal pain',
+      '4 — Asymptomatic'
+    ],
+    vals: ['1','2','3','4'],
+    def: '3',
+    hint: 'Asymptomatic (4) is highest risk'
+  },
+
+  thalach: {
+    label: 'Max Heart Rate (thalach)',
+    type: 'number',
+    min: 71,
+    max: 202,
+    def: 150,
+    hint: 'bpm during stress test'
+  },
+
+  ca: {
+    label: 'Major Vessels (ca)',
+    type: 'select',
+    opts: ['0','1','2','3'],
+    vals: ['0','1','2','3'],
+    def: '0',
+    hint: 'Number of vessels colored (0–3)'
+  },
+
+  oldpeak: {
+    label: 'ST Depression (oldpeak)',
+    type: 'number',
+    min: 0,
+    max: 6.2,
+    step: 0.1,
+    def: 1.5,
+    hint: 'Exercise-induced ST depression'
+  },
+
+  thal: {
+    label: 'Thalassemia (thal)',
+    type: 'select',
+    opts: [
+      '3 — Normal',
+      '6 — Fixed defect',
+      '7 — Reversible defect'
+    ],
+    vals: ['3','6','7'],
+    def: '3',
+    hint: 'Reversible defect (7) = highest risk'
+  },
+
+  exang: {
+    label: 'Exercise Angina (exang)',
+    type: 'select',
+    opts: ['0 — No','1 — Yes'],
+    vals: ['0','1'],
+    def: '0',
+    hint: 'Chest pain during exercise'
+  }
+};
+
+  const form = document.getElementById('dynForm');
+  form.innerHTML = features.map(f => {
+    const h = hints[f] || { label:f, type:'number', min:0, max:10, def:1, hint:'' };
+    let input = '';
+    if (h.type === 'select') {
+      input = `<select class="finput" id="pf-${f}">${h.opts.map((o,i)=>`<option value="${h.vals[i]}"${h.vals[i]===h.def?' selected':''}>${o}</option>`).join('')}</select>`;
+    } else {
+      input = `<input type="number" class="finput" id="pf-${f}" value="${h.def}" min="${h.min}" max="${h.max}" step="${h.step||1}">`;
+    }
+    return `<div class="fg"><label class="flabel">${h.label}</label>${input}<span class="fhint">${h.hint}</span></div>`;
+  }).join('');
+}
+
+function buildRadarDonut(allFeatures, allImportances, selected) {
+  const selIdx = selected.map(f => allFeatures.indexOf(f)).filter(i=>i>=0);
+  const selImps = selIdx.map(i => +(allImportances[i]*100).toFixed(1));
+
+  mkChart('radarChart', {
+    type:'radar',
+    data:{
+      labels: selected,
+      datasets:[{ label:'Weight', data:selImps, borderColor:C.red, backgroundColor:C.redL, borderWidth:2, pointRadius:5, pointBackgroundColor:C.red }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ r:{ beginAtZero:true, ticks:{font:{size:9},color:'#5c6677',stepSize:5}, pointLabels:{font:{size:11},color:'#8b95a5'}, grid:{color:'rgba(15,23,42,.08)'}, angleLines:{color:'rgba(15,23,42,.08)'} } } }
+  });
+
+  mkChart('donutChart', {
+    type:'doughnut',
+    data:{
+      labels: selected,
+      datasets:[{ data:selImps, backgroundColor:[C.red,C.blue,C.green,C.amber,C.teal,C.gray], borderWidth:0, hoverOffset:4 }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11}, color:'#8b95a5', padding:10 } } },
+      cutout:'60%' }
+  });
+}
+
+function runPredict() {
+  if (!modelReady) { alert('Run the pipeline first.'); return; }
+  if (!selectedFeatures.length) return;
+
+  const body = {};
+  selectedFeatures.forEach(f => {
+    const el = document.getElementById('pf-' + f);
+    if (el) body[f] = parseFloat(el.value);
+  });
+
+  fetch('/predict', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { alert('Error: ' + d.error); return; }
+    const isHigh = d.probability >= 50;
+    const res = document.getElementById('pred-result');
+    res.className = 'pred-result vis ' + (isHigh ? 'hi' : 'lo');
+    document.getElementById('pr-tag').textContent  = isHigh ? 'High Risk Detected' : 'Low Risk Profile';
+    document.getElementById('pr-val').textContent  = d.probability.toFixed(1) + '% risk probability';
+    document.getElementById('pr-desc').textContent = isHigh
+      ? 'Multiple high-risk indicators detected. The model predicts elevated likelihood of coronary heart disease. Immediate clinical evaluation is strongly recommended.'
+      : 'Low-risk profile detected. Continue routine cardiovascular monitoring and maintain heart-healthy lifestyle habits.';
+    document.getElementById('pr-bar-lbl').textContent = 'Risk Score: ' + d.probability.toFixed(1) + '%';
+    const bar = document.getElementById('pr-bar');
+    bar.style.background = isHigh ? '#d66a6a' : '#6aa85a';
+    bar.style.width = '0%';
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = d.probability + '%'; }));
+    log('Prediction: ' + d.probability.toFixed(1) + '% risk (' + (isHigh?'HIGH':'LOW') + ')', isHigh?'err':'ok');
+  })
+  .catch(err => { alert('Request failed: ' + err); });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  initOverviewChart();
+  connectSSE();
+  // Hide predict form until model is ready
+  document.getElementById('pred-form-wrap').style.display = 'none';
+  document.getElementById('pred-locked').style.display = 'block';
+  log('Connected — click Run Pipeline to begin.', 'info');
+});
+</script>
+</body>
+</html>
