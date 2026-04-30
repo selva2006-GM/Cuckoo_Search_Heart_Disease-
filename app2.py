@@ -12,6 +12,7 @@ import traceback
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 from preprocessing import Preprocessing
@@ -117,12 +118,13 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
 
     # ── STEP 2: BASELINE RANDOM FOREST ───────────────────────────
     header("STEP 2 - BASELINE RANDOM FOREST")
-    step("Training baseline RF (150 estimators) ...")
+    step("Training baseline RF (550 estimators) ...")
 
-    rf_baseline = RandomForestModel(n_estimators=150)
+    rf_baseline = RandomForestModel(n_estimators=550, max_depth=None)
     rf_baseline.train(X_train, y_train)
     metrics_b = rf_baseline.evaluate(X_test, y_test)
     fi = rf_baseline.feature_importances(list(X.columns))
+
 
     metrics_table(metrics_b)
     print()
@@ -135,15 +137,15 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
 
     # ── STEP 3: FEATURE SELECTION ─────────────────────────────────
     header("STEP 3 - FEATURE SELECTION")
-    step("Selecting top-9 features by importance ...")
+    step("Selecting top-11    features by importance ...")
 
     fs = FeatureSelector()
-    selected = fs.select_top_k(rf_baseline.model, X_train, top_k=9)
+    selected = fs.select_top_k(rf_baseline.model, X_train, top_k=11)
     dropped  = [f for f in list(X.columns) if f not in selected]
 
-    kv("Selected features",    ", ".join(selected))
-    kv("Dropped features",     ", ".join(dropped) if dropped else "none")
-    kv("Importance retained",  f"{fs.total_importance_retained:.2%}")
+    kv("Selected features",   ", ".join(selected))
+    kv("Dropped features",    ", ".join(dropped) if dropped else "none")
+    kv("Importance retained", f"{fs.total_importance_retained:.2%}")
     ok("Feature selection complete")
     section_done()
 
@@ -155,7 +157,7 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
     header("STEP 4 - RF WITH SELECTED FEATURES")
     step("Retraining RF on selected features ...")
 
-    rf_fs = RandomForestModel(n_estimators=150)
+    rf_fs = RandomForestModel(n_estimators=550)
     rf_fs.train(X_train_fs, y_train)
     metrics_fs = rf_fs.evaluate(X_test_fs, y_test)
 
@@ -167,29 +169,31 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
 
     # ── STEP 5: RANDOM SEARCH ─────────────────────────────────────
     header("STEP 5 - RANDOM SEARCH HYPERPARAMETER TUNING")
-    step("Running 30 random-search iterations ...")
+    step("Running 50 random-search iterations (5-fold CV) ...")
 
     rs_history: list[float] = []
 
     def rs_cb(info):
         rs_history.append(info["best_score"])
-        progress_bar(info["iteration"], 30, prefix="  RS ")
+        progress_bar(info["iteration"], 50, prefix="  RS ")
 
-    rs = RandomSearch(n_iterations=30)
+    rs = RandomSearch(n_iterations=50, cv_folds=5)
     rs_params, rs_score, _ = rs.optimize(
         None, X_train_fs, X_test_fs, y_train, y_test, progress_cb=rs_cb
     )
     print()
 
-    kv("Best score",   f"{rs_score:.4f}")
-    kv("n_estimators", int(rs_params[0]))
-    kv("max_depth",    int(rs_params[1]))
+    kv("Best score (test acc)", f"{rs_score:.4f}")
+    kv("n_estimators",          int(rs_params[0]))
+    kv("max_depth",             int(rs_params[1]))
+    kv("min_samples_split",     int(rs_params[2]))
+    kv("min_samples_leaf",      int(rs_params[3]))
     ok("Random search done")
     section_done()
 
     # ── STEP 6: CUCKOO SEARCH ─────────────────────────────────────
     header("STEP 6 - CUCKOO SEARCH HYPERPARAMETER TUNING")
-    step("Running Cuckoo Search (25 nests, 10 iterations) ...")
+    step("Running Cuckoo Search (25 nests, 5 iterations, 3-fold CV) ...")
 
     cs_history: list[float] = []
 
@@ -197,16 +201,18 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
         cs_history.append(info["best_score"])
         progress_bar(info["iteration"], 10, prefix="  CS ")
 
-    cs = CuckooSearch(n_nests=30, n_iterations=10, pa=0.25)
+    cs = CuckooSearch(n_nests=25, n_iterations=10, pa=0.15, cv_folds=3)
     rf_dummy = RandomForestModel()
     cs_params, cs_score, _ = cs.optimize(
         rf_dummy, X_train_fs, X_test_fs, y_train, y_test, progress_cb=cs_cb
     )
     print()
 
-    kv("Best score",   f"{cs_score:.4f}")
-    kv("n_estimators", int(cs_params[0]))
-    kv("max_depth",    int(cs_params[1]))
+    kv("Best score (test acc)", f"{cs_score:.4f}")
+    kv("n_estimators",          int(round(cs_params[0])))
+    kv("max_depth",             int(round(cs_params[1])))
+    kv("min_samples_split",     int(round(cs_params[2])))
+    kv("min_samples_leaf",      int(round(cs_params[3])))
     ok("Cuckoo search done")
     section_done()
 
@@ -220,15 +226,33 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
         best_params = rs_params
         winner = "Random Search"
 
-    n_est = max(16, min(300, int(best_params[0])))
-    max_d = max(5,  min(20,  int(best_params[1])))
+    n_est     = max(10,  min(600, int(round(best_params[0]))))  
+    max_d     = max(3,   min(30,  int(round(best_params[1]))))
+    min_split = max(2,   min(20,  int(round(best_params[2]))))
+    min_leaf  = max(1,   min(10,  int(round(best_params[3]))))
 
-    step(f"Winner: {winner}  ->  n_estimators={n_est}, max_depth={max_d}")
+    step(f"Winner: {winner}")
+    kv("n_estimators",      n_est)
+    kv("max_depth",         max_d)
+    kv("min_samples_split", min_split)
+    kv("min_samples_leaf",  min_leaf)
 
+    final_model = RandomForestClassifier(
+        n_estimators     = n_est,
+        max_depth        = max_d,
+        min_samples_split= min_split,
+        min_samples_leaf = min_leaf,
+        random_state     = 42,
+        n_jobs           = -1,
+    )
+    final_model.fit(X_train_fs, y_train)
+
+    # Wrap in RandomForestModel shell to reuse evaluate()
     rf_final = RandomForestModel(n_estimators=n_est, max_depth=max_d)
-    rf_final.train(X_train_fs, y_train)
+    rf_final.model = final_model
     metrics_final = rf_final.evaluate(X_test_fs, y_test)
 
+    print()
     metrics_table(metrics_final)
     print()
 
@@ -248,7 +272,12 @@ def run_pipeline(dataset_path: str, target_col: str) -> dict:
 
     state.update(
         rf=rf_final, fs=fs,
-        best_params={"n_estimators": n_est, "max_depth": max_d},
+        best_params={
+            "n_estimators"     : n_est,
+            "max_depth"        : max_d,
+            "min_samples_split": min_split,
+            "min_samples_leaf" : min_leaf,
+        },
         metrics_final=metrics_final,
     )
     return state
@@ -307,7 +336,7 @@ def main():
     )
     parser.add_argument(
         "--dataset", default="dataset/cleanedData/heart_combined.csv",
-        help="Path to the CSV dataset (default: dataset/cleanedData/heart_combined.csv)"
+        help="Path to the CSV dataset"
     )
     parser.add_argument(
         "--target", default="target",

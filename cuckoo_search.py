@@ -55,7 +55,7 @@ class CuckooSearch:
         # Search space: [n_estimators, max_depth, min_samples_split, min_samples_leaf]
         # Bounds informed by earlier runs
         lb = np.array([ 50,  3,  2, 1])
-        ub = np.array([300, 20, 20, 10])
+        ub = np.array([600, 30, 20, 10])
         dim = len(lb)
 
         # ── Initialise population ─────────────────────────────────
@@ -157,8 +157,8 @@ class RandomSearch:
         self.cv_folds     = cv_folds
 
     def _evaluate(self, params, X_train, y_train):
-        n_est     = max(10,  min(300, int(params[0])))
-        max_d     = max(3,   min(20,  int(params[1])))
+        n_est     = max(10,  min(600, int(params[0])))
+        max_d     = max(3,   min(30,  int(params[1])))
         min_split = max(2,   min(20,  int(params[2])))
         min_leaf  = max(1,   min(10,  int(params[3])))
 
@@ -168,11 +168,11 @@ class RandomSearch:
             min_samples_split= min_split,
             min_samples_leaf = min_leaf,
             random_state     = 42,
-            n_jobs           = -1,
+            n_jobs           = 1,
         )
         cv     = StratifiedKFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
-        scores = cross_val_score(model, X_train, y_train, cv=cv, scoring="f1", n_jobs=-1)
-        return round(float(scores.mean()) * 100, 4)
+        scores = cross_val_score(model, X_train, y_train, cv=cv, scoring="accuracy", n_jobs=-1)
+        return round(float(scores.mean()))
 
     def optimize(self, rf, X_train, X_test, y_train, y_test, progress_cb=None):
         best_score  = 0
@@ -181,8 +181,8 @@ class RandomSearch:
 
         for i in range(self.n_iterations):
             params = np.array([
-                np.random.randint(50, 300),
-                np.random.randint(3,  20),
+                np.random.randint(50, 600),
+                np.random.randint(3,  30),
                 np.random.randint(2,  20),
                 np.random.randint(1,  10),
             ])

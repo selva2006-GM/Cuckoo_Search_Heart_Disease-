@@ -172,7 +172,7 @@ def _run_pipeline(dataset_path: str, target_col: str):
         y = df[target_col]
         # Train/test split
         # Step 1: limit dataset to 500 samples
-        X_small, _, y_small, _ = train_test_split(X, y,train_size=500,stratify=y,random_state=42)
+        X_small, _, y_small, _ = train_test_split(X, y,train_size=900,stratify=y,random_state=42)
 
         # Step 2: split that into train/test
         X_train, X_test, y_train, y_test = train_test_split(
@@ -217,7 +217,7 @@ def _run_pipeline(dataset_path: str, target_col: str):
         # ── STEP 3: FEATURE SELECTION ─────────────────────────
         emit("stage", {"stage": "feature_selection", "status": "start"})
         fs = FeatureSelector()
-        selected = fs.select_top_k(rf_baseline.model, X_train, top_k=9)
+        selected = fs.select_top_k(rf_baseline.model, X_train, top_k=8)
 
         emit("feature_selection", {
             "selected_features":    selected,
